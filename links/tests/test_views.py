@@ -4,8 +4,10 @@ from django.urls import reverse
 from django.utils import timezone
 from links.models import Link, ClickLog
 import datetime
+from django.test import override_settings
 
 
+@override_settings(RATELIMIT_ENABLED=False)
 class LinkViewsTest(TestCase):
     def setUp(self):
         self.client = Client()

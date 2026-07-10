@@ -87,6 +87,35 @@ DATABASES = {
     }
 }
 
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_CLASS': 'redis.connection.BlockingConnectionPool',
+            'CONNECTION_POOL_CLASS_KWARGS': {
+                'max_connections': 50,
+                'timeout': 20,
+            },
+            'PARSER_CLASS': 'redis.connection.HiredisParser' if 'hiredis' in __import__('sys').modules else None,
+        },
+        'KEY_PREFIX': 'shortlink',
+    }
+}
+
+if os.environ.get('RUNNING_TESTS') or os.environ.get('CI'):
+    CACHES['default'] = {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+
+RATELIMIT_ENABLED = True
+RATELIMIT_USE_CACHE = 'default'  # using redis cache
+RATELIMIT_VIEW = 'links.views.rate_limit_exceeded'
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

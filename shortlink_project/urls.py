@@ -15,10 +15,18 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.http import HttpResponse, HttpResponseForbidden
 from django.urls import path, include
+from django_ratelimit.exceptions import Ratelimited
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('links.urls')),
 ]
+
+
+def handler403(request, exception=None):
+    if isinstance(exception, Ratelimited):
+        return HttpResponse('Sorry you are blocked', status=429)
+    return HttpResponseForbidden('Forbidden')

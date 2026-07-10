@@ -1,7 +1,12 @@
 asgiref==3.11.1
+async-timeout==5.0.1
 Django==5.2.16
+django-ratelimit==4.1.0
+django-redis==7.0.0
 gunicorn==26.0.0
 packaging==26.2
 psycopg2-binary==2.9.12
 python-dotenv==1.2.2
+redis==8.0.1
 sqlparse==0.5.5
+typing_extensions==4.16.0

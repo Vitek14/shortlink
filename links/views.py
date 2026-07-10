@@ -8,10 +8,12 @@ from .models import Link, ClickLog
 from django.shortcuts import redirect
 from django.http import HttpResponseGone, HttpResponseNotFound
 from django.views.decorators.cache import never_cache
+from django_ratelimit.decorators import ratelimit
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LinkCreateView(View):
+    @method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=True))
     def post(self, request):
         try:
             data = json.loads(request.body)
@@ -79,6 +81,7 @@ def redirect_view(request, short_code):
 
 
 class LinkInfoView(View):
+    @method_decorator(ratelimit(key='ip', rate='30/m', method='GET', block=True))
     def get(self, request, short_code):
         try:
             link = Link.objects.get(short_code=short_code)
@@ -101,6 +104,7 @@ class LinkInfoView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LinkDeactivateView(View):
+    @method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=True))
     def post(self, request, short_code):
         try:
             link = Link.objects.get(short_code=short_code)
@@ -114,6 +118,7 @@ class LinkDeactivateView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LinkDeleteView(View):
+    @method_decorator(ratelimit(key='ip', rate='10/m', method='DELETE', block=True))
     def delete(self, request, short_code):
         try:
             link = Link.objects.get(short_code=short_code)
