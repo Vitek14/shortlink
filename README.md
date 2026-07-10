@@ -151,18 +151,66 @@ Response (200 OK):
 
 ---
 
+## Rate Limiting
+
+The API enforces rate limits to prevent abuse:
+
+- `POST requests` – **10 requests per minute** per IP address.
+- `GET requests` – **30 requests per minute** per IP address.
+
+When the limit is exceeded, the server responds with **`429 Too Many Requests`** and a JSON error message:
+
+```json
+{
+    "error": "Sorry you are blocked"
+}
+```
+
+Limits are implemented using **[django-ratelimit](https://github.com/jsocol/django-ratelimit)** with **Redis** as the storage backend for counters.
+
+---
+
+## Redis Configuration
+
+Redis is used for:
+
+- Storing rate‑limit counters.
+- Caching (optional, can be extended).
+
+### Setting up Redis locally
+
+1. Start Redis (e.g., via Docker):
+   ```bash
+   docker run -d -p 6379:6379 redis:7-alpine
+   ```
+   or natively with `redis-server`.
+
+2. Set the environment variable:
+   ```bash
+   export REDIS_URL=redis://localhost:6379/1
+   ```
+
+3. Run the Django server – Redis will be automatically used.
+
+### Fallback behaviour
+
+If Redis is not available (or `REDIS_URL` is not set), the application falls back to **local‑memory cache** (per process) – this is **not recommended for production** but useful for development and testing. In production, always use Redis.
+
+---
+
 ## Configuration via Environment Variables
 
 You can override settings using environment variables:
 
-| Variable        | Description                           | Default         |
-|-----------------|---------------------------------------|-----------------|
-| `DB_NAME`       | PostgreSQL database name              | `shortlink-db`      |
-| `DB_USER`       | PostgreSQL user                       | `postgres`      |
-| `DB_PASSWORD`   | PostgreSQL password                   | `1234`         |
-| `DB_HOST`       | PostgreSQL host                       | `localhost`     |
-| `DB_PORT`       | PostgreSQL port                       | `5432`          |
-| `SECRET_KEY`    | Django secret key                     | secret      |
+| Variable       | Description                                    | Default         |
+|----------------|------------------------------------------------|-----------------|
+| `DB_NAME`      | PostgreSQL database name                       | `shortlink-db`      |
+| `DB_USER`      | PostgreSQL user                                | `postgres`      |
+| `DB_PASSWORD`  | PostgreSQL password                            | `1234`         |
+| `DB_HOST`      | PostgreSQL host                                | `localhost`     |
+| `DB_PORT`      | PostgreSQL port                                | `5432`          |
+| `SECRET_KEY`   | Django secret key                              | `secret`      |
+| `REDIS_URL`    | Redis url for caching and ratelimiting support | `my-redis-url`      |
 
 ---
 
