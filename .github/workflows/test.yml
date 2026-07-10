@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, dev ]
   pull_request:
-    branches: [ main, feature/shortlink-main ]
+    branches: [ main, feature/shorlink-main ]
 
 jobs:
   test:

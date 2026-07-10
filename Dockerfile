@@ -1,16 +1,30 @@
-FROM python:3.11-slim-bookworm
-WORKDIR /app
-COPY requirements.txt .
+FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=shortlink_project.settings
+
+WORKDIR /app
+
+# Install build dependencies for psycopg2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    gcc \
+    python3-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# copying project
 COPY . .
 
-RUN python manage.py collectstatic --noinput
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# we will be running on port 8000, so opening it
-EXPOSE 8000
+EXPOSE 8001
 
-# Using gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8001"]
