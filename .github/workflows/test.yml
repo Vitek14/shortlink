@@ -55,4 +55,5 @@ jobs:
           DB_PASSWORD: test_password
           DB_HOST: localhost
           DB_PORT: 5432
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: python manage.py test links/tests/
