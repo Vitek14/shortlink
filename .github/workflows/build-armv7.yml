@@ -1,0 +1,15 @@
+name: Build (armv7)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  call-build:
+    uses: ./.github/workflows/build-template.yml
+    with:
+      platform: linux/arm/v7
+      push_image: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit  # from repo secrets

@@ -1,0 +1,15 @@
+name: Build (arm64)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  call-build:
+    uses: ./.github/workflows/build-template.yml
+    with:
+      platform: linux/arm64
+      push_image: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit  # from repo secrets
