@@ -114,7 +114,6 @@ if os.environ.get('RUNNING_TESTS') or os.environ.get('CI'):
 
 RATELIMIT_ENABLED = True
 RATELIMIT_USE_CACHE = 'default'  # using redis cache
-RATELIMIT_VIEW = 'links.views.rate_limit_exceeded'
 
 
 # Password validation
