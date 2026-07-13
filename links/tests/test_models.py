@@ -2,13 +2,19 @@ from django.test import TestCase
 from django.utils import timezone
 from links.models import Link, ClickLog
 import datetime
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 
 class LinkModelTest(TestCase):
     def setUp(self):
+        self.user = User.objects.create_user(username='testuser', password='testpass')
         self.link = Link.objects.create(
             original_url='https://example.com',
-            short_code='test123'
+            short_code='test123',
+            user=self.user
         )
 
     def test_generate_unique_code(self):

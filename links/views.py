@@ -33,7 +33,12 @@ class LinkCreateView(View):
         custom_code = data.get('custom_code')
         expires_at_str = data.get('expires_at')
 
-        if custom_code:
+        if custom_code is not None:
+            if custom_code == '':
+                return JsonResponse({
+                    'error': 'custom_code must not be empty if provided'
+                }, status=400)
+
             if not SHORT_CODE_PATTERN.match(custom_code):
                 return JsonResponse({
                     'error': 'Invalid custom_code. Only letters, digits, underscore and hyphen allowed, max 20 characters.'
@@ -41,6 +46,7 @@ class LinkCreateView(View):
 
             if Link.objects.filter(short_code=custom_code).exists():
                 return JsonResponse({'error': 'Custom code already taken'}, status=400)
+
             short_code = custom_code
         else:
             short_code = Link.generate_unique_code()
@@ -141,6 +147,9 @@ class LinkDeleteView(View):
             link = Link.objects.get(short_code=short_code)
         except Link.DoesNotExist:
             return JsonResponse({'error': 'Not found'}, status=404)
+
+        if link.user != request.user:
+            return JsonResponse({'error': 'You are not the owner'}, status=403)
 
         link.delete()
         return JsonResponse({'status': 'deleted', 'short_code': short_code})

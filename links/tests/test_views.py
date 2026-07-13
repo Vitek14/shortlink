@@ -2,26 +2,32 @@ import json
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 from links.models import Link, ClickLog
 import datetime
 from django.test import override_settings
 
+User = get_user_model()
 
 @override_settings(RATELIMIT_ENABLED=False)
 class LinkViewsTest(TestCase):
     def setUp(self):
         self.client = Client()
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.client.force_login(self.user)
+
         self.link = Link.objects.create(
             original_url='https://example.com',
             short_code='abc123',
-            expires_at=timezone.now() + datetime.timedelta(days=1)
+            expires_at=timezone.now() + datetime.timedelta(days=1),
+            user=self.user
         )
-        # helper var with link that expired
         self.expired_link = Link.objects.create(
             original_url='https://expired.com',
             short_code='expired',
             expires_at=timezone.now() - datetime.timedelta(days=1),
-            is_active=True
+            is_active=True,
+            user=self.user
         )
 
     def test_create_link_auto_code(self):
@@ -33,8 +39,8 @@ class LinkViewsTest(TestCase):
         self.assertIn('short_code', resp_data)
         self.assertEqual(resp_data['original_url'], 'https://new.example.com')
         self.assertIsNone(resp_data['expires_at'])
-        # link must be created in db
-        self.assertTrue(Link.objects.filter(short_code=resp_data['short_code']).exists())
+        link = Link.objects.get(short_code=resp_data['short_code'])
+        self.assertEqual(link.user, self.user)
 
     def test_create_link_custom_code(self):
         url = reverse('link-create')
@@ -45,13 +51,37 @@ class LinkViewsTest(TestCase):
         response = self.client.post(url, data=json.dumps(data), content_type='application/json')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['short_code'], 'mycode')
-        self.assertTrue(Link.objects.filter(short_code='mycode').exists())
+        link = Link.objects.get(short_code='mycode')
+        self.assertEqual(link.user, self.user)
+
+    def test_create_link_custom_code_invalid(self):
+        url = reverse('link-create')
+
+        data = {
+            'original_url': 'https://test.com',
+            'custom_code': ''
+        }
+        response = self.client.post(url, data=json.dumps(data), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('custom_code must not be empty if provided', response.json()['error'])
+
+        invalid_codes = ['bad code', 'русский', 'code$', 'a'*21]
+        for code in invalid_codes:
+            data['custom_code'] = code
+            response = self.client.post(url, data=json.dumps(data), content_type='application/json')
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('Invalid custom_code', response.json()['error'])
 
     def test_create_link_custom_code_conflict(self):
+        Link.objects.create(
+            original_url='https://taken.com',
+            short_code='taken',
+            user=self.user
+        )
         url = reverse('link-create')
         data = {
             'original_url': 'https://conflict.com',
-            'custom_code': 'abc123'  # уже существует
+            'custom_code': 'taken'
         }
         response = self.client.post(url, data=json.dumps(data), content_type='application/json')
         self.assertEqual(response.status_code, 400)
@@ -84,7 +114,6 @@ class LinkViewsTest(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, 'https://example.com')
-        # Checking the increase in the counter and the creation of the log
         self.link.refresh_from_db()
         self.assertEqual(self.link.click_count, 1)
         self.assertTrue(ClickLog.objects.filter(link=self.link).exists())
@@ -92,7 +121,7 @@ class LinkViewsTest(TestCase):
     def test_redirect_view_expired(self):
         url = reverse('redirect', kwargs={'short_code': 'expired'})
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 410)  # Gone
+        self.assertEqual(response.status_code, 410)
         self.expired_link.refresh_from_db()
         self.assertFalse(self.expired_link.is_active)
 
@@ -125,3 +154,46 @@ class LinkViewsTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'deleted')
         self.assertFalse(Link.objects.filter(short_code='abc123').exists())
+
+    def test_cannot_deactivate_foreign_link(self):
+        other_user = User.objects.create_user(username='other', password='otherpass')
+        Link.objects.create(
+            original_url='https://foreign.com',
+            short_code='foreign',
+            user=other_user
+        )
+        url = reverse('link-deactivate', kwargs={'short_code': 'foreign'})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('not the owner', response.json()['error'])
+
+    def test_cannot_delete_foreign_link(self):
+        other_user = User.objects.create_user(username='other2', password='otherpass')
+        Link.objects.create(
+            original_url='https://foreign2.com',
+            short_code='foreign2',
+            user=other_user
+        )
+        url = reverse('link-delete', kwargs={'short_code': 'foreign2'})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('not the owner', response.json()['error'])
+
+    def test_unauthorized_create(self):
+        self.client.logout()
+        url = reverse('link-create')
+        data = {'original_url': 'https://shouldfail.com'}
+        response = self.client.post(url, data=json.dumps(data), content_type='application/json')
+        self.assertEqual(response.status_code, 302)
+
+    def test_unauthorized_deactivate(self):
+        self.client.logout()
+        url = reverse('link-deactivate', kwargs={'short_code': 'abc123'})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+
+    def test_unauthorized_delete(self):
+        self.client.logout()
+        url = reverse('link-delete', kwargs={'short_code': 'abc123'})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, 302)
