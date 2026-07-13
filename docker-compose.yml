@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d shortlink_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shortlink-db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/1
       - DJANGO_SETTINGS_MODULE=shortlink_project.settings
-      - DB_NAME=shortlink_db
+      - DB_NAME=shortlink-db
       - DB_USER=postgres
       - DB_PASSWORD=1234
     depends_on:
