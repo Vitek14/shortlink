@@ -11,6 +11,7 @@ from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.contrib.auth import authenticate, login
 import re
 
@@ -88,12 +89,13 @@ def redirect_view(request, short_code):
         link.save(update_fields=['is_active'])
         return HttpResponseGone("The link has expired.")
 
-    ClickLog.objects.create(
-        link=link,
-        ip_address=request.META.get('REMOTE_ADDR'),
-        user_agent=request.META.get('HTTP_USER_AGENT', '')
-    )
-    link.increment_clicks()
+    with transaction.atomic():
+        ClickLog.objects.create(
+            link=link,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+        link.increment_clicks()
 
     return redirect(link.original_url)
 
