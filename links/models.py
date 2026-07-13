@@ -2,6 +2,9 @@ from django.db import models
 from django.utils import timezone
 import string
 import random
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 class Link(models.Model):
@@ -11,6 +14,7 @@ class Link(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     click_count = models.PositiveIntegerField(default=0)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='links')
 
     def is_expired(self):
         if self.expires_at and timezone.now() > self.expires_at:

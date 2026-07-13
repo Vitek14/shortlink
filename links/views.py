@@ -9,9 +9,14 @@ from django.shortcuts import redirect
 from django.http import HttpResponseGone, HttpResponseNotFound
 from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth import authenticate, login
+import re
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(login_required, name='dispatch')
 class LinkCreateView(View):
     @method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=True))
     def post(self, request):
@@ -24,10 +29,16 @@ class LinkCreateView(View):
         if not original_url:
             return JsonResponse({'error': 'original_url is required'}, status=400)
 
+        SHORT_CODE_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,20}$')
         custom_code = data.get('custom_code')
         expires_at_str = data.get('expires_at')
 
         if custom_code:
+            if not SHORT_CODE_PATTERN.match(custom_code):
+                return JsonResponse({
+                    'error': 'Invalid custom_code. Only letters, digits, underscore and hyphen allowed, max 20 characters.'
+                }, status=400)
+
             if Link.objects.filter(short_code=custom_code).exists():
                 return JsonResponse({'error': 'Custom code already taken'}, status=400)
             short_code = custom_code
@@ -46,7 +57,8 @@ class LinkCreateView(View):
         link = Link.objects.create(
             original_url=original_url,
             short_code=short_code,
-            expires_at=expires_at
+            expires_at=expires_at,
+            user=request.user
         )
 
         short_url = request.build_absolute_uri(f'/s/{short_code}')
@@ -103,6 +115,7 @@ class LinkInfoView(View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(login_required, name='dispatch')
 class LinkDeactivateView(View):
     @method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=True))
     def post(self, request, short_code):
@@ -111,12 +124,16 @@ class LinkDeactivateView(View):
         except Link.DoesNotExist:
             return JsonResponse({'error': 'Not found'}, status=404)
 
+        if link.user != request.user:
+            return JsonResponse({'error': 'You are not the owner'}, status=403)
+
         link.is_active = False
         link.save(update_fields=['is_active'])
         return JsonResponse({'status': 'deactivated', 'short_code': short_code})
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(login_required, name='dispatch')
 class LinkDeleteView(View):
     @method_decorator(ratelimit(key='ip', rate='10/m', method='DELETE', block=True))
     def delete(self, request, short_code):
@@ -127,3 +144,24 @@ class LinkDeleteView(View):
 
         link.delete()
         return JsonResponse({'status': 'deleted', 'short_code': short_code})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LoginView(View):
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        username = data.get('username')
+        password = data.get('password')
+        if not username or not password:
+            return JsonResponse({'error': 'username and password required'}, status=400)
+
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            return JsonResponse({'status': 'ok', 'user': username})
+        else:
+            return JsonResponse({'error': 'Invalid credentials'}, status=401)
